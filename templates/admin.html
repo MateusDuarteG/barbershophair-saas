@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Kanban - {{ shop.name }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#0f1015',
+                        cardBg: '#181a20',
+                        columnBg: '#13151b',
+                        neonGreen: '#00ff66',
+                        neonOrange: '#ff6600',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+
+<body class="bg-darkBg text-gray-100 min-h-screen flex flex-col">
+
+    <!-- Topbar / Navbar do Painel -->
+    <header class="bg-cardBg border-b border-gray-800 px-6 py-4 flex justify-between items-center shadow-lg">
+        <div class="flex items-center gap-3">
+            <span class="text-2xl">💈</span>
+            <div>
+                <h1 class="text-lg font-bold text-white">OSPro / <span class="text-neonGreen">BarberKanban</span></h1>
+                <p class="text-xs text-gray-400">{{ shop.name }} — Gestão de Atendimentos</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-4">
+            <div class="bg-darkBg px-4 py-2 rounded-xl border border-gray-800 text-right">
+                <span class="text-[10px] text-gray-400 uppercase block font-semibold">Faturamento Hoje</span>
+                <span class="text-lg font-extrabold text-neonGreen">R$ {{ "%.2f"|format(total_revenue) }}</span>
+            </div>
+            <a href="/{{ shop.slug }}" target="_blank"
+                class="bg-gray-800 hover:bg-gray-700 text-neonGreen text-xs font-semibold px-4 py-2.5 rounded-xl border border-gray-700 transition shadow">
+                Ver Link da Bio ↗
+            </a>
+        </div>
+    </header>
+
+    <!-- Container Principal do Kanban -->
+    <main class="flex-1 p-6 overflow-x-auto">
+        <div class="mb-6 flex justify-between items-center">
+            <div>
+                <h2 class="text-xl font-bold text-white">Fluxo de Agendamentos (Kanban)</h2>
+                <p class="text-xs text-gray-400 mt-0.5">Acompanhe os clientes por data, confirme via WhatsApp ou
+                    remaneje horários com facilidade.</p>
+            </div>
+        </div>
+
+        <!-- Colunas do Kanban -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 min-w-[1000px]">
+
+            {% set ns = namespace(today_count=0, tomorrow_count=0, future_count=0, done_count=0) %}
+            {% for a in appointments %}
+            {% if a.status == 'agendado' %}
+            {% if a.start_datetime.date() == today %}
+            {% set ns.today_count = ns.today_count + 1 %}
+            {% elif a.start_datetime.date() == today + timedelta(days=1) %}
+            {% set ns.tomorrow_count = ns.tomorrow_count + 1 %}
+            {% else %}
+            {% set ns.future_count = ns.future_count + 1 %}
+            {% endif %}
+            {% elif a.status == 'concluido' %}
+            {% set ns.done_count = ns.done_count + 1 %}
+            {% endif %}
+            {% endfor %}
+
+            <!-- COLUNA 1: HOJE -->
+            <div class="bg-columnBg rounded-2xl p-4 border border-gray-800/80 flex flex-col h-[75vh]">
+                <div class="flex justify-between items-center mb-4 pb-2 border-b border-gray-800">
+                    <span class="text-sm font-bold text-neonGreen flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-neonGreen"></span> Hoje
+                    </span>
+                    <span class="bg-gray-800 text-gray-300 text-xs px-2.5 py-0.5 rounded-full font-bold">{{
+                        ns.today_count }}</span>
+                </div>
+                <div class="flex-1 overflow-y-auto space-y-3 pr-1">
+                    {% for a in appointments %}
+                    {% if a.status == 'agendado' and a.start_datetime.date() == today %}
+                    <div class="bg-cardBg p-4 rounded-xl border border-gray-800 shadow-md">
+                        <div class="flex justify-between items-start mb-2">
+                            <h4 class="font-bold text-white text-sm">{{ a.client_name }}</h4>
+                            <span
+                                class="text-xs bg-neonGreen/10 text-neonGreen font-bold px-2 py-0.5 rounded border border-neonGreen/20">
+                                {{ a.start_datetime.strftime('%H:%M') }}
+                            </span>
+                        </div>
+                        <p class="text-xs text-gray-400 mb-3">📱 {{ a.client_phone }}</p>
+
+                        <div class="flex items-center gap-1.5 pt-2 border-t border-gray-800/60">
+                            <a href="https://wa.me/55{{ a.client_phone|replace('(', '')|replace(')', '')|replace(' ', '')|replace('-', '') }}?text=Olá%20{{ a.client_name }},%20passando%20para%20confirmar%20seu%20horário%20hoje%20às%20{{ a.start_datetime.strftime('%H:%M') }}.%0AServiço:%20{{ services_map[a.service_id].name }}%0AValor:%20R$%20{{ '%.2f'|format(services_map[a.service_id].price) }}%0ATudo%20certo?"
+                                target="_blank"
+                                class="flex-1 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white text-[11px] font-semibold py-1.5 px-2 rounded-lg border border-emerald-800 text-center transition">
+                                💬 WhatsApp
+                            </a>
+                            <button onclick="openRescheduleModal(this)" data-id="{{ a.id }}"
+                                data-name="{{ a.client_name }}" data-date="{{ a.start_datetime.strftime('%Y-%m-%d') }}"
+                                data-time="{{ a.start_datetime.strftime('%H:%M') }}"
+                                class="bg-gray-800 hover:bg-purple-600 text-gray-300 hover:text-white text-[11px] font-bold py-1.5 px-2 rounded-lg transition"
+                                title="Remanejar">
+                                🔄
+                            </button>
+                            <button onclick="updateStatus('{{ a.id }}', 'concluido')"
+                                class="bg-gray-800 hover:bg-emerald-500 hover:text-darkBg text-gray-300 text-[11px] font-bold py-1.5 px-2 rounded-lg transition"
+                                title="Concluir">
+                                ✓
+                            </button>
+                            <button onclick="updateStatus('{{ a.id }}', 'cancelado')"
+                                class="bg-gray-800 hover:bg-red-600 text-gray-400 hover:text-white text-[11px] font-bold py-1.5 px-2 rounded-lg transition"
+                                title="Cancelar">
+                                ✕
+                            </button>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- COLUNA 2: AMANHÃ -->
+            <div class="bg-columnBg rounded-2xl p-4 border border-gray-800/80 flex flex-col h-[75vh]">
+                <div class="flex justify-between items-center mb-4 pb-2 border-b border-gray-800">
+                    <span class="text-sm font-bold text-neonOrange flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-neonOrange"></span> Amanhã
+                    </span>
+                    <span class="bg-gray-800 text-gray-300 text-xs px-2.5 py-0.5 rounded-full font-bold">{{
+                        ns.tomorrow_count }}</span>
+                </div>
+                <div class="flex-1 overflow-y-auto space-y-3 pr-1">
+                    {% for a in appointments %}
+                    {% if a.status == 'agendado' and a.start_datetime.date() == today + timedelta(days=1) %}
+                    <div class="bg-cardBg p-4 rounded-xl border border-gray-800 shadow-md">
+                        <div class="flex justify-between items-start mb-2">
+                            <h4 class="font-bold text-white text-sm">{{ a.client_name }}</h4>
+                            <span
+                                class="text-xs bg-neonOrange/10 text-neonOrange font-bold px-2 py-0.5 rounded border border-neonOrange/20">
+                                {{ a.start_datetime.strftime('%H:%M') }}
+                            </span>
+                        </div>
+                        <p class="text-xs text-gray-400 mb-3">📱 {{ a.client_phone }}</p>
+
+                        <div class="flex items-center gap-1.5 pt-2 border-t border-gray-800/60">
+                            <a href="https://wa.me/55{{ a.client_phone|replace('(', '')|replace(')', '')|replace(' ', '')|replace('-', '') }}?text=Olá%20{{ a.client_name }},%20passando%20para%20confirmar%20seu%20agendamento%20amanhã%20às%20{{ a.start_datetime.strftime('%H:%M') }}.%0AServiço:%20{{ services_map[a.service_id].name }}%0AValor:%20R$%20{{ '%.2f'|format(services_map[a.service_id].price) }}%0ASe%20precisar%20alterar%20ou%20confirmar,%20acesse%20o%20link:%20{{ base_url }}/{{ shop.slug }}?agendamento={{ a.id }}"
+                                target="_blank"
+                                class="flex-1 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white text-[11px] font-semibold py-1.5 px-2 rounded-lg border border-emerald-800 text-center transition">
+                                💬 Confirmar / Link
+                            </a>
+                            <button onclick="openRescheduleModal(this)" data-id="{{ a.id }}"
+                                data-name="{{ a.client_name }}" data-date="{{ a.start_datetime.strftime('%Y-%m-%d') }}"
+                                data-time="{{ a.start_datetime.strftime('%H:%M') }}"
+                                class="bg-gray-800 hover:bg-purple-600 text-gray-300 hover:text-white text-[11px] font-bold py-1.5 px-2 rounded-lg transition"
+                                title="Remanejar">
+                                🔄
+                            </button>
+                            <button onclick="updateStatus('{{ a.id }}', 'cancelado')"
+                                class="bg-gray-800 hover:bg-red-600 text-gray-400 hover:text-white text-[11px] font-bold py-1.5 px-2 rounded-lg transition"
+                                title="Cancelar">
+                                ✕
+                            </button>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- COLUNA 3: PRÓXIMOS DIAS -->
+            <div class="bg-columnBg rounded-2xl p-4 border border-gray-800/80 flex flex-col h-[75vh]">
+                <div class="flex justify-between items-center mb-4 pb-2 border-b border-gray-800">
+                    <span class="text-sm font-bold text-purple-400 flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-purple-400"></span> Próximos Dias
+                    </span>
+                    <span class="bg-gray-800 text-gray-300 text-xs px-2.5 py-0.5 rounded-full font-bold">{{
+                        ns.future_count }}</span>
+                </div>
+                <div class="flex-1 overflow-y-auto space-y-3 pr-1">
+                    {% for a in appointments %}
+                    {% if a.status == 'agendado' and a.start_datetime.date() > today + timedelta(days=1) %}
+                    <div class="bg-cardBg p-4 rounded-xl border border-gray-800 shadow-md">
+                        <div class="flex justify-between items-start mb-2">
+                            <h4 class="font-bold text-white text-sm">{{ a.client_name }}</h4>
+                            <span
+                                class="text-xs bg-purple-500/10 text-purple-400 font-bold px-2 py-0.5 rounded border border-purple-500/20">
+                                {{ a.start_datetime.strftime('%d/%m - %H:%M') }}
+                            </span>
+                        </div>
+                        <p class="text-xs text-gray-400 mb-3">📱 {{ a.client_phone }}</p>
+
+                        <div class="flex items-center gap-1.5 pt-2 border-t border-gray-800/60">
+                            <a href="https://wa.me/55{{ a.client_phone|replace('(', '')|replace(')', '')|replace(' ', '')|replace('-', '') }}?text=Olá%20{{ a.client_name }},%20lembrando%20do%20seu%20agendamento%20em%20{{ a.start_datetime.strftime('%d/%m') }}%20às%20{{ a.start_datetime.strftime('%H:%M') }}.%0AServiço:%20{{ services_map[a.service_id].name }}%0AValor:%20R$%20{{ '%.2f'|format(services_map[a.service_id].price) }}"
+                                target="_blank"
+                                class="flex-1 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white text-[11px] font-semibold py-1.5 px-2 rounded-lg border border-emerald-800 text-center transition">
+                                💬 Contato
+                            </a>
+                            <button onclick="openRescheduleModal(this)" data-id="{{ a.id }}"
+                                data-name="{{ a.client_name }}" data-date="{{ a.start_datetime.strftime('%Y-%m-%d') }}"
+                                data-time="{{ a.start_datetime.strftime('%H:%M') }}"
+                                class="bg-gray-800 hover:bg-purple-600 text-gray-300 hover:text-white text-[11px] font-bold py-1.5 px-2 rounded-lg transition"
+                                title="Remanejar">
+                                🔄
+                            </button>
+                            <button onclick="updateStatus('{{ a.id }}', 'cancelado')"
+                                class="bg-gray-800 hover:bg-red-600 text-gray-400 hover:text-white text-[11px] font-bold py-1.5 px-2 rounded-lg transition"
+                                title="Cancelar">
+                                ✕
+                            </button>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- COLUNA 4: CONCLUÍDOS -->
+            <div class="bg-columnBg rounded-2xl p-4 border border-gray-800/80 flex flex-col h-[75vh]">
+                <div class="flex justify-between items-center mb-4 pb-2 border-b border-gray-800">
+                    <span class="text-sm font-bold text-gray-400 flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-gray-500"></span> Concluídos
+                    </span>
+                    <span class="bg-gray-800 text-gray-300 text-xs px-2.5 py-0.5 rounded-full font-bold">{{
+                        ns.done_count }}</span>
+                </div>
+                <div class="flex-1 overflow-y-auto space-y-3 pr-1">
+                    {% for a in appointments %}
+                    {% if a.status == 'concluido' %}
+                    <div class="bg-cardBg p-3 rounded-xl border border-gray-800/60 opacity-75">
+                        <div class="flex justify-between items-start mb-1">
+                            <h4 class="font-bold text-gray-300 text-xs">{{ a.client_name }}</h4>
+                            <span
+                                class="text-[10px] bg-emerald-500/20 text-emerald-400 font-semibold px-2 py-0.5 rounded">
+                                Concluído
+                            </span>
+                        </div>
+                        <p class="text-[10px] text-gray-500">{{ a.start_datetime.strftime('%d/%m às %H:%M') }}</p>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- MODAL DE REAGENDAMENTO -->
+    <div id="rescheduleModal"
+        class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="bg-cardBg border border-gray-800 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <h3 class="text-base font-bold text-white mb-1">🔄 Remanejar Agendamento</h3>
+            <p id="modalClientName" class="text-xs text-gray-400 mb-4"></p>
+
+            <input type="hidden" id="rescheduleApptId">
+
+            <div class="space-y-3 mb-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 uppercase mb-1">Nova Data</label>
+                    <input type="date" id="newDate"
+                        class="w-full bg-darkBg border border-gray-700 rounded-xl p-3 text-white focus:border-neonGreen focus:outline-none text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 uppercase mb-1">Novo Horário (HH:MM)</label>
+                    <input type="time" id="newTime"
+                        class="w-full bg-darkBg border border-gray-700 rounded-xl p-3 text-white focus:border-neonGreen focus:outline-none text-sm">
+                </div>
+            </div>
+
+            <div class="flex gap-2">
+                <button onclick="closeRescheduleModal()"
+                    class="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-300 font-semibold py-2.5 rounded-xl text-xs transition">
+                    Cancelar
+                </button>
+                <button onclick="submitReschedule()"
+                    class="flex-1 bg-neonGreen hover:bg-emerald-400 text-darkBg font-bold py-2.5 rounded-xl text-xs transition">
+                    Salvar Nova Data
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script de Ações e Reagendamento -->
+    <script>
+        function updateStatus(appointmentId, newStatus) {
+            fetch(`/api/appointments/${appointmentId}/status?status=${newStatus}`, {
+                method: 'POST'
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Erro ao atualizar status.');
+                    }
+                });
+        }
+
+        const modal = document.getElementById('rescheduleModal');
+        const modalClientName = document.getElementById('modalClientName');
+        const rescheduleApptId = document.getElementById('rescheduleApptId');
+        const newDate = document.getElementById('newDate');
+        const newTime = document.getElementById('newTime');
+
+        // Função limpa usando data-* attributes (elimina 100% dos erros do linter)
+        function openRescheduleModal(button) {
+            const id = button.getAttribute('data-id');
+            const clientName = button.getAttribute('data-name');
+            const currentDate = button.getAttribute('data-date');
+            const currentTime = button.getAttribute('data-time');
+
+            rescheduleApptId.value = id;
+            modalClientName.textContent = `Cliente: ${clientName}`;
+            newDate.value = currentDate;
+            newTime.value = currentTime;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeRescheduleModal() {
+            modal.classList.remove('flex');
+            modal.classList.add('hidden');
+        }
+
+        function submitReschedule() {
+            const id = rescheduleApptId.value;
+            const date = newDate.value;
+            const time = newTime.value;
+
+            if (!date || !time) {
+                alert('Preencha a data e o horário.');
+                return;
+            }
+
+            fetch(`/api/appointments/${id}/reschedule`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ date: date, time: time })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('✨ Agendamento remanejado com sucesso!');
+                        location.reload();
+                    } else {
+                        alert('Erro ao remanejar: ' + (data.detail || 'Tente novamente.'));
+                    }
+                });
+        }
+    </script>
+</body>
+
+</html>
